@@ -1,0 +1,21 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "@supabase_url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase_anon_key",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_key",
+    "SQUARE_ACCESS_TOKEN": "@square_access_token",
+    "SQUARE_APPLICATION_ID": "@square_app_id",
+    "SQUARE_ENVIRONMENT": "production",
+    "SQUARE_LOCATION_ID": "@square_location_id",
+    "OPENAI_API_KEY": "@openai_api_key",
+    "NEXT_PUBLIC_BUSINESS_TZ": "America/Chicago",
+    "NEXT_PUBLIC_REPORTING_OFFSET_MIN": "120"
+  }
+}
+

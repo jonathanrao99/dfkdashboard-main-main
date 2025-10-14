@@ -1,22 +1,23 @@
-import DesiFlavorsSidebar from '@/components/layout/DesiFlavorsSidebar'
-import DesiTopbar from '@/components/layout/DesiTopbar'
+/**
+ * Dashboard Layout
+ * Wraps all dashboard pages with Sidebar
+ * Following PRD specifications - mobile-first, fully responsive
+ */
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+import { ReactNode } from 'react'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { Topbar } from '@/components/layout/Topbar'
+
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="h-screen flex bg-gray-50 overflow-hidden">
-      <aside className="w-64 flex-shrink-0 shadow-xl h-full">
-        <DesiFlavorsSidebar />
-      </aside>
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <DesiTopbar />
-        <div className="flex-1 overflow-auto">
+    <div className="min-h-screen">
+      <Sidebar />
+      <div className="lg:pl-64">
+        <Topbar />
+        <main className="p-4 lg:p-8">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

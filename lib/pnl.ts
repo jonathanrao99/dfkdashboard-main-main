@@ -1,343 +1,316 @@
-// P&L Builder for Reports
-import { supabaseAdmin } from './supabase'
+/**
+ * P&L (Profit & Loss) Calculation Functions
+ * Financial formulas for the dashboard
+ * Following PRD specifications
+ */
 
-export interface PnLData {
-  period: string
-  revenue: {
-    square: number
-    doordash: number
-    ubereats: number
-    grubhub: number
-    catering: number
-    total: number
-  }
-  expenses: {
-    foodSupplies: number
-    fuel: number
-    labor: number
-    permits: number
-    equipment: number
-    processing: number
-    total: number
-  }
-  netProfit: number
-  profitMargin: number
+// Types for financial data
+export type DailyNet = { d: string; net: number }
+export type CategorySpend = { category: string; value: number; color?: string }
+export type SourceNet = {
+  source: 'Square' | 'DoorDash' | 'UberEats' | 'Grubhub' | 'Catering'
+  net: number
 }
 
-export interface CashFlowData {
-  period: string
-  dailyFlow: Array<{
-    date: string
-    inflow: number
-    outflow: number
-    net: number
-  }>
-  summary: {
-    totalInflow: number
-    totalOutflow: number
-    netFlow: number
-    endingBalance: number
-  }
+export type ReconcileStats = { payoutsMatched: number; payoutsTotal: number; bankUnmatched: number; alerts: string[] };
+
+export type Expense = { id: string; date: string; vendor: string; category: string; amount: number; notes?: string; receiptUrl?: string };
+
+export type InventoryItem = {
+  id: string; sku?: string; name: string; unit: string; costPerUnit: number;
+  unitsPerCase?: number; onHand: number; reorderPoint?: number; parLevel?: number;
+  vendor?: string; category?: string
+};
+export type InventoryMove = {
+  id: string; itemId: string; moveDate: string; qty: number; unitCost: number;
+  type: 'purchase'|'usage'|'adjustment'|'waste'|'stocktake'; referenceId?: string; notes?: string
+};
+
+export interface RevenueOrder {
+  items_gross: number
+  discounts: number
+  tax: number
+  tips: number
+  platform_commission: number
+  processing_fees: number
+  adjustments: number
+  payout_amount: number
+  source: string
+  order_datetime: string
 }
 
-export interface ReconciliationData {
-  period: string
-  platforms: Record<string, {
-    transactions: number
-    matched: number
-    unmatched: number
-    amount: number
-    status: 'complete' | 'pending'
-  }>
-  bankDeposits: {
-    total: number
-    matched: number
-    unmatched: number
-    amount: number
-  }
+export interface Transaction {
+  amount: number
+  type: 'income' | 'expense' | 'transfer'
+  category_id?: string
+  txn_date: string
 }
 
-// Real P&L generator that queries Supabase
-export async function generatePnL(startDate: string, endDate: string): Promise<PnLData> {
-  try {
-    // Get revenue data from revenue_orders (prioritize Square data)
-    const { data: revenueData, error: revenueError } = await supabaseAdmin
-      .from('revenue_orders')
-      .select('source, payout_amount, order_datetime')
-      .gte('order_datetime', startDate)
-      .lte('order_datetime', endDate)
-      .order('source', { ascending: true }) // Square will come first alphabetically
+// As per PRD §6
+export const orderNet = (r: {
+  items_gross:number, discounts:number, tax:number, tips:number, platform_commission:number, processing_fees:number, adjustments:number
+}) =>
+  r.items_gross - r.discounts + r.tax + r.tips - r.platform_commission - r.processing_fees + r.adjustments;
 
-    if (revenueError) throw revenueError
+/**
+ * Calculate net revenue from a revenue order
+ * Formula from PRD: items_gross - discounts + tax + tips - platform_commission - processing_fees + adjustments
+ */
+export function calculateOrderNet(order: RevenueOrder): number {
+  return (
+    order.items_gross -
+    order.discounts +
+    order.tax +
+    order.tips -
+    order.platform_commission -
+    order.processing_fees +
+    order.adjustments
+  )
+}
 
-    // Aggregate revenue by source
-    const revenue = {
-      square: 0,
-      doordash: 0,
-      ubereats: 0,
-      grubhub: 0,
-      catering: 0,
-      total: 0
-    }
+/**
+ * Calculate total net sales from multiple orders
+ */
+export function calculateTotalNetSales(orders: RevenueOrder[]): number {
+  return orders.reduce((sum, order) => sum + calculateOrderNet(order), 0)
+}
 
-    revenueData?.forEach(order => {
-      const amount = Number(order.payout_amount) || 0
-      revenue.total += amount
-      
-      switch (order.source.toLowerCase()) {
-        case 'square':
-          revenue.square += amount
-          break
-        case 'doordash':
-          revenue.doordash += amount
-          break
-        case 'ubereats':
-          revenue.ubereats += amount
-          break
-        case 'grubhub':
-          revenue.grubhub += amount
-          break
-        case 'catering':
-          revenue.catering += amount
-          break
-        default:
-          // Handle any other sources
-          console.log(`Unknown revenue source: ${order.source}`)
-      }
+/**
+ * Calculate total gross sales (before fees)
+ */
+export function calculateTotalGrossSales(orders: RevenueOrder[]): number {
+  return orders.reduce((sum, order) => sum + order.items_gross, 0)
+}
+
+/**
+ * Calculate total expenses from transactions
+ */
+export function calculateTotalExpenses(transactions: Transaction[]): number {
+  return transactions
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+}
+
+/**
+ * Calculate net profit (revenue - expenses)
+ */
+export function calculateNetProfit(revenue: number, expenses: number): number {
+  return revenue - expenses
+}
+
+/**
+ * Calculate profit margin percentage
+ */
+export function calculateProfitMargin(netProfit: number, revenue: number): number {
+  if (revenue === 0) return 0
+  return (netProfit / revenue) * 100
+}
+
+/**
+ * Group revenue orders by source
+ */
+export function groupRevenueBySource(orders: RevenueOrder[]): SourceNet[] {
+  const sourceMap = new Map<string, number>()
+
+  orders.forEach(order => {
+    const currentNet = sourceMap.get(order.source) || 0
+    sourceMap.set(order.source, currentNet + calculateOrderNet(order))
+  })
+
+  return Array.from(sourceMap.entries())
+    .map(([source, net]) => ({
+      source: source as SourceNet['source'],
+      net: Math.round(net * 100) / 100
+    }))
+    .sort((a, b) => b.net - a.net)
+}
+
+/**
+ * Group expenses by category
+ */
+export function groupExpensesByCategory(
+  transactions: Transaction[],
+  categories: Map<string, { name: string; color?: string }>
+): CategorySpend[] {
+  const categoryMap = new Map<string, number>()
+
+  transactions
+    .filter(t => t.type === 'expense')
+    .forEach(t => {
+      const categoryId = t.category_id || 'uncategorized'
+      const currentValue = categoryMap.get(categoryId) || 0
+      categoryMap.set(categoryId, currentValue + Math.abs(t.amount))
     })
 
-    // Get expense data from transactions
-    const { data: expenseData, error: expenseError } = await supabaseAdmin
-      .from('transactions')
-      .select(`
-        amount,
-        categories(name)
-      `)
-      .eq('type', 'expense')
-      .gte('txn_date', startDate)
-      .lte('txn_date', endDate)
-
-    if (expenseError) throw expenseError
-
-    // Aggregate expenses by category
-    const expenses = {
-      foodSupplies: 0,
-      fuel: 0,
-      labor: 0,
-      permits: 0,
-      equipment: 0,
-      processing: 0,
-      total: 0
-    }
-
-    expenseData?.forEach(transaction => {
-      const amount = Math.abs(Number(transaction.amount)) || 0
-      expenses.total += amount
-      
-      const categoryName = (transaction.categories as any)?.name?.toLowerCase() || ''
-      
-      if (categoryName.includes('food') || categoryName.includes('supplies') || categoryName.includes('inventory')) {
-        expenses.foodSupplies += amount
-      } else if (categoryName.includes('fuel') || categoryName.includes('gas')) {
-        expenses.fuel += amount
-      } else if (categoryName.includes('labor') || categoryName.includes('payroll') || categoryName.includes('wage')) {
-        expenses.labor += amount
-      } else if (categoryName.includes('permit') || categoryName.includes('license')) {
-        expenses.permits += amount
-      } else if (categoryName.includes('equipment') || categoryName.includes('maintenance')) {
-        expenses.equipment += amount
-      } else if (categoryName.includes('processing') || categoryName.includes('fee')) {
-        expenses.processing += amount
+  return Array.from(categoryMap.entries())
+    .map(([categoryId, value]) => {
+      const category = categories.get(categoryId)
+      return {
+        category: category?.name || 'Uncategorized',
+        value: Math.round(value * 100) / 100,
+        color: category?.color
       }
     })
-
-    const netProfit = revenue.total - expenses.total
-    const profitMargin = revenue.total > 0 ? (netProfit / revenue.total) * 100 : 0
-
-    return {
-      period: `${startDate} to ${endDate}`,
-      revenue,
-      expenses,
-      netProfit,
-      profitMargin: Math.round(profitMargin * 10) / 10
-    }
-  } catch (error) {
-    console.error('Error generating P&L:', error)
-    // Return empty data on error
-    return {
-      period: `${startDate} to ${endDate}`,
-      revenue: { square: 0, doordash: 0, ubereats: 0, grubhub: 0, catering: 0, total: 0 },
-      expenses: { foodSupplies: 0, fuel: 0, labor: 0, permits: 0, equipment: 0, processing: 0, total: 0 },
-      netProfit: 0,
-      profitMargin: 0
-    }
-  }
+    .sort((a, b) => b.value - a.value)
 }
 
-export async function generateCashFlow(startDate: string, endDate: string): Promise<CashFlowData> {
-  try {
-    // Get daily revenue data
-    const { data: revenueData, error: revenueError } = await supabaseAdmin
-      .from('revenue_orders')
-      .select('order_datetime, payout_amount')
-      .gte('order_datetime', startDate)
-      .lte('order_datetime', endDate)
-      .order('order_datetime', { ascending: true })
+/**
+ * Calculate daily net sales for sparkline/trend
+ */
+export function calculateDailyNetSales(orders: RevenueOrder[]): DailyNet[] {
+  const dailyMap = new Map<string, number>()
 
-    if (revenueError) throw revenueError
+  orders.forEach(order => {
+    const date = new Date(order.order_datetime).toISOString().split('T')[0]
+    const day = new Date(date).getDate().toString()
+    const net = calculateOrderNet(order)
 
-    // Get daily expense data
-    const { data: expenseData, error: expenseError } = await supabaseAdmin
-      .from('transactions')
-      .select('txn_date, amount')
-      .eq('type', 'expense')
-      .gte('txn_date', startDate)
-      .lte('txn_date', endDate)
-      .order('txn_date', { ascending: true })
+    dailyMap.set(day, (dailyMap.get(day) || 0) + net)
+  })
 
-    if (expenseError) throw expenseError
-
-    // Group by date
-    const dailyMap = new Map<string, { inflow: number; outflow: number }>()
-
-    // Process revenue
-    revenueData?.forEach(order => {
-      const date = order.order_datetime.split('T')[0]
-      const amount = Number(order.payout_amount) || 0
-      const existing = dailyMap.get(date) || { inflow: 0, outflow: 0 }
-      dailyMap.set(date, { ...existing, inflow: existing.inflow + amount })
-    })
-
-    // Process expenses
-    expenseData?.forEach(transaction => {
-      const date = transaction.txn_date
-      const amount = Math.abs(Number(transaction.amount)) || 0
-      const existing = dailyMap.get(date) || { inflow: 0, outflow: 0 }
-      dailyMap.set(date, { ...existing, outflow: existing.outflow + amount })
-    })
-
-    // Convert to array and calculate net
-    const dailyFlow = Array.from(dailyMap.entries()).map(([date, amounts]) => ({
-      date,
-      inflow: amounts.inflow,
-      outflow: amounts.outflow,
-      net: amounts.inflow - amounts.outflow
-    })).sort((a, b) => a.date.localeCompare(b.date))
-
-    // Calculate summary
-    const totalInflow = dailyFlow.reduce((sum, day) => sum + day.inflow, 0)
-    const totalOutflow = dailyFlow.reduce((sum, day) => sum + day.outflow, 0)
-    const netFlow = totalInflow - totalOutflow
-
-    return {
-      period: `${startDate} to ${endDate}`,
-      dailyFlow,
-      summary: {
-        totalInflow,
-        totalOutflow,
-        netFlow,
-        endingBalance: netFlow // Simplified - in real app would track actual balance
-      }
-    }
-  } catch (error) {
-    console.error('Error generating cash flow:', error)
-    return {
-      period: `${startDate} to ${endDate}`,
-      dailyFlow: [],
-      summary: {
-        totalInflow: 0,
-        totalOutflow: 0,
-        netFlow: 0,
-        endingBalance: 0
-      }
-    }
-  }
+  return Array.from(dailyMap.entries())
+    .map(([d, net]) => ({
+      d,
+      net: Math.round(net * 100) / 100
+    }))
+    .sort((a, b) => parseInt(a.d) - parseInt(b.d))
 }
 
-export async function generateReconciliation(startDate: string, endDate: string): Promise<ReconciliationData> {
-  try {
-    // Get revenue orders by platform
-    const { data: revenueData, error: revenueError } = await supabaseAdmin
-      .from('revenue_orders')
-      .select('source, payout_amount, id')
-      .gte('order_datetime', startDate)
-      .lte('order_datetime', endDate)
+/**
+ * Calculate daily expenses
+ */
+export function calculateDailyExpenses(transactions: Transaction[]): DailyNet[] {
+  const dailyMap = new Map<string, number>()
 
-    if (revenueError) throw revenueError
+  transactions
+    .filter(t => t.type === 'expense')
+    .forEach(t => {
+      const date = new Date(t.txn_date).toISOString().split('T')[0]
+      const day = new Date(date).getDate().toString()
+      const amount = Math.abs(t.amount)
 
-    // Get reconciliation data
-    const { data: reconciliationData, error: reconError } = await supabaseAdmin
-      .from('reconciliations')
-      .select('revenue_order_id, payout_id, transaction_id')
-      .gte('linked_at', startDate)
-      .lte('linked_at', endDate)
-
-    if (reconError) throw reconError
-
-    // Get bank deposits
-    const { data: bankData, error: bankError } = await supabaseAdmin
-      .from('payouts')
-      .select('id, amount, source')
-      .gte('payout_date', startDate)
-      .lte('payout_date', endDate)
-
-    if (bankError) throw bankError
-
-    // Process platform data
-    const platforms: Record<string, any> = {}
-    const platformGroups = revenueData?.reduce((acc, order) => {
-      const source = order.source.toLowerCase()
-      if (!acc[source]) {
-        acc[source] = { orders: [], totalAmount: 0 }
-      }
-      acc[source].orders.push(order)
-      acc[source].totalAmount += Number(order.payout_amount) || 0
-      return acc
-    }, {} as Record<string, any>) || {}
-
-    // Calculate matched/unmatched for each platform
-    const reconciledOrderIds = new Set(reconciliationData?.map(r => r.revenue_order_id) || [])
-    
-    Object.entries(platformGroups).forEach(([platform, data]) => {
-      const matched = data.orders.filter((order: any) => reconciledOrderIds.has(order.id)).length
-      const total = data.orders.length
-      
-      platforms[platform] = {
-        transactions: total,
-        matched,
-        unmatched: total - matched,
-        amount: data.totalAmount,
-        status: matched === total ? 'complete' : 'pending'
-      }
+      dailyMap.set(day, (dailyMap.get(day) || 0) + amount)
     })
 
-    // Process bank deposits
-    const totalBankDeposits = bankData?.length || 0
-    const matchedBankDeposits = reconciliationData?.filter(r => r.payout_id).length || 0
-    const totalBankAmount = bankData?.reduce((sum, deposit) => sum + (Number(deposit.amount) || 0), 0) || 0
-
-    return {
-      period: `${startDate} to ${endDate}`,
-      platforms,
-      bankDeposits: {
-        total: totalBankDeposits,
-        matched: matchedBankDeposits,
-        unmatched: totalBankDeposits - matchedBankDeposits,
-        amount: totalBankAmount
-      }
-    }
-  } catch (error) {
-    console.error('Error generating reconciliation:', error)
-    return {
-      period: `${startDate} to ${endDate}`,
-      platforms: {},
-      bankDeposits: {
-        total: 0,
-        matched: 0,
-        unmatched: 0,
-        amount: 0
-      }
-    }
-  }
+  return Array.from(dailyMap.entries())
+    .map(([d, net]) => ({
+      d,
+      net: Math.round(net * 100) / 100
+    }))
+    .sort((a, b) => parseInt(a.d) - parseInt(b.d))
 }
 
+/**
+ * Calculate total sales tax collected
+ */
+export function calculateTotalSalesTax(orders: RevenueOrder[]): number {
+  return orders.reduce((sum, order) => sum + order.tax, 0)
+}
+
+/**
+ * Calculate total tips received
+ */
+export function calculateTotalTips(orders: RevenueOrder[]): number {
+  return orders.reduce((sum, order) => sum + order.tips, 0)
+}
+
+/**
+ * Calculate total platform fees (commissions + processing fees)
+ */
+export function calculateTotalPlatformFees(orders: RevenueOrder[]): number {
+  return orders.reduce(
+    (sum, order) => sum + order.platform_commission + order.processing_fees,
+    0
+  )
+}
+
+/**
+ * Calculate average order value
+ */
+export function calculateAverageOrderValue(orders: RevenueOrder[]): number {
+  if (orders.length === 0) return 0
+  const totalNet = calculateTotalNetSales(orders)
+  return totalNet / orders.length
+}
+
+/**
+ * Calculate take rate (percentage of gross that goes to fees)
+ */
+export function calculateTakeRate(orders: RevenueOrder[]): number {
+  const totalGross = calculateTotalGrossSales(orders)
+  const totalFees = calculateTotalPlatformFees(orders)
+  if (totalGross === 0) return 0
+  return (totalFees / totalGross) * 100
+}
+
+/**
+ * Format currency for display
+ */
+export function formatCurrency(amount: number, includeCents: boolean = true): string {
+  const formatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: includeCents ? 2 : 0,
+    maximumFractionDigits: includeCents ? 2 : 0
+  })
+  return formatter.format(amount)
+}
+
+/**
+ * Format percentage for display
+ */
+export function formatPercentage(value: number, decimals: number = 1): string {
+  return `${value.toFixed(decimals)}%`
+}
+
+/**
+ * Calculate month-to-date totals
+ */
+export function filterMTD<T extends { order_datetime?: string; txn_date?: string }>(
+  items: T[]
+): T[] {
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  return items.filter(item => {
+    const dateStr = item.order_datetime || item.txn_date
+    if (!dateStr) return false
+    const itemDate = new Date(dateStr)
+    return itemDate >= startOfMonth && itemDate <= now
+  })
+}
+
+/**
+ * Calculate week-to-date totals
+ */
+export function filterWTD<T extends { order_datetime?: string; txn_date?: string }>(
+  items: T[]
+): T[] {
+  const now = new Date()
+  const startOfWeek = new Date(now)
+  startOfWeek.setDate(now.getDate() - now.getDay()) // Sunday
+  startOfWeek.setHours(0, 0, 0, 0)
+
+  return items.filter(item => {
+    const dateStr = item.order_datetime || item.txn_date
+    if (!dateStr) return false
+    const itemDate = new Date(dateStr)
+    return itemDate >= startOfWeek && itemDate <= now
+  })
+}
+
+/**
+ * Filter items by date range
+ */
+export function filterByDateRange<T extends { order_datetime?: string; txn_date?: string }>(
+  items: T[],
+  startDate: Date,
+  endDate: Date
+): T[] {
+  return items.filter(item => {
+    const dateStr = item.order_datetime || item.txn_date
+    if (!dateStr) return false
+    const itemDate = new Date(dateStr)
+    return itemDate >= startDate && itemDate <= endDate
+  })
+}

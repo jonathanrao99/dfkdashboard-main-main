@@ -1,14 +1,12 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { Toaster } from 'sonner'
-import '../src/index.css'
+import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: 'Desi Flavors Katy - Financial Dashboard',
-  description: 'Professional financial dashboard for Desi Flavors Katy food truck',
+  title: 'Desi Flavors Dash',
+  description: 'A calm, Stripe-grade financial dashboard for a food truck.',
 }
 
 export default function RootLayout({
@@ -17,13 +15,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <ErrorBoundary>
-          {children}
-          <Toaster position="top-right" richColors />
-        </ErrorBoundary>
-      </body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.variable}>{children}</body>
     </html>
   )
 }

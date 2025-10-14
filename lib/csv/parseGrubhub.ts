@@ -1,17 +1,16 @@
-export function parseGrubhubRow(row: Record<string, string>) {
+// Note: Structure adapted from parseDoorDash.ts, field names need to be verified with actual Grubhub CSV format.
+export function parseGrubhubRow(row: Record<string,string>){
+  const num = (v?:string)=> Number((v||'0').replace(/[^0-9.-]/g,''))
   return {
-    order_id: row['Order ID'] || row['Order Number'] || '',
-    order_datetime: new Date(row['Order Date'] || row['Date'] || '').toISOString(),
-    items_gross: parseFloat(row['Item Subtotal'] || row['Subtotal'] || '0') || 0,
-    discounts: parseFloat(row['Discounts'] || row['Promo'] || '0') || 0,
-    tax: parseFloat(row['Tax'] || row['Tax Amount'] || '0') || 0,
-    tips: parseFloat(row['Tip'] || row['Customer Tip'] || '0') || 0,
-    platform_commission: parseFloat(row['Commission'] || row['Grubhub Fee'] || '0') || 0,
-    processing_fees: parseFloat(row['Processing Fee'] || row['Payment Fee'] || '0') || 0,
-    adjustments: parseFloat(row['Adjustments'] || row['Other Fees'] || '0') || 0,
-    payout_amount: parseFloat(row['Net Payout'] || row['Total Payout'] || '0') || 0,
-    source: 'grubhub',
-    raw: row
+    order_id: row['Order #'],
+    order_datetime: new Date(row['Date']),
+    items_gross: num(row['Food & Beverage']),
+    discounts: num(row['Adjustments & Fees']), // This might need splitting
+    tax: num(row['Sales Tax']),
+    tips: num(row['Tip']),
+    platform_commission: num(row['Commission']),
+    processing_fees: num(row['Processing Fee']),
+    adjustments: 0, // Assuming adjustments are included in 'Adjustments & Fees'
+    payout_amount: num(row['Net Deposit']),
   }
 }
-

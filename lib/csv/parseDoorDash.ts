@@ -1,17 +1,16 @@
-export function parseDoorDashRow(row: Record<string, string>) {
+// As per PRD §18 Quick Copy Snippets
+export function parseDoorDashRow(row: Record<string,string>){
+  const num = (v?:string)=> Number((v||'0').replace(/[^0-9.-]/g,''))
   return {
-    order_id: row['Order ID'] || row['Order Number'] || '',
-    order_datetime: new Date(row['Order Date'] || row['Date'] || '').toISOString(),
-    items_gross: parseFloat(row['Item Subtotal'] || row['Subtotal'] || '0') || 0,
-    discounts: parseFloat(row['Discounts'] || row['Discount Amount'] || '0') || 0,
-    tax: parseFloat(row['Tax'] || row['Tax Amount'] || '0') || 0,
-    tips: parseFloat(row['Tip'] || row['Customer Tip'] || '0') || 0,
-    platform_commission: parseFloat(row['Commission'] || row['Platform Fee'] || '0') || 0,
-    processing_fees: parseFloat(row['Processing Fee'] || row['Payment Processing'] || '0') || 0,
-    adjustments: parseFloat(row['Adjustments'] || row['Other Fees'] || '0') || 0,
-    payout_amount: parseFloat(row['Net Payout'] || row['Total Payout'] || '0') || 0,
-    source: 'doordash',
-    raw: row
+    order_id: row['Order ID'],
+    order_datetime: new Date(row['Order Date']),
+    items_gross: num(row['Item Subtotal']),
+    discounts: num(row['Discounts']),
+    tax: num(row['Tax']),
+    tips: num(row['Tip']),
+    platform_commission: num(row['Commission']),
+    processing_fees: num(row['Processing Fee']),
+    adjustments: num(row['Adjustments']),
+    payout_amount: num(row['Net Payout']),
   }
 }
-

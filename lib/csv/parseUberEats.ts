@@ -1,17 +1,16 @@
-export function parseUberEatsRow(row: Record<string, string>) {
+// Note: Structure adapted from parseDoorDash.ts, field names need to be verified with actual UberEats CSV format.
+export function parseUberEatsRow(row: Record<string,string>){
+  const num = (v?:string)=> Number((v||'0').replace(/[^0-9.-]/g,''))
   return {
-    order_id: row['Order ID'] || row['Order Number'] || '',
-    order_datetime: new Date(row['Order Date'] || row['Date'] || '').toISOString(),
-    items_gross: parseFloat(row['Item Subtotal'] || row['Subtotal'] || '0') || 0,
-    discounts: parseFloat(row['Discounts'] || row['Promo Discount'] || '0') || 0,
-    tax: parseFloat(row['Tax'] || row['Tax Amount'] || '0') || 0,
-    tips: parseFloat(row['Tip'] || row['Customer Tip'] || '0') || 0,
-    platform_commission: parseFloat(row['Commission'] || row['Uber Eats Fee'] || '0') || 0,
-    processing_fees: parseFloat(row['Processing Fee'] || row['Payment Fee'] || '0') || 0,
-    adjustments: parseFloat(row['Adjustments'] || row['Other Charges'] || '0') || 0,
-    payout_amount: parseFloat(row['Net Payout'] || row['Total Payout'] || '0') || 0,
-    source: 'ubereats',
-    raw: row
+    order_id: row['Order ID'],
+    order_datetime: new Date(row['Date']),
+    items_gross: num(row['Subtotal']),
+    discounts: num(row['Promotions']),
+    tax: num(row['Tax']),
+    tips: num(row['Tip']),
+    platform_commission: num(row['Marketplace Fee']),
+    processing_fees: num(row['Processing Fee']),
+    adjustments: num(row['Adjustments']),
+    payout_amount: num(row['Payout']),
   }
 }
-

@@ -23,11 +23,15 @@ export function Topbar() {
           <DateRangeButton onApply={handleApplyDateRange} />
           <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-2">
             <FileSpreadsheet className="h-4 w-4" />
-            <span className="hidden md:inline">CSV</span>
+            <span className="hidden md:inline">Export CSV</span>
           </Button>
           <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-2">
             <FileDown className="h-4 w-4" />
-            <span className="hidden md:inline">PDF</span>
+            <span className="hidden md:inline">Export PDF</span>
+          </Button>
+          <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-2 text-orange-600 border-orange-200 hover:bg-orange-50">
+            <Plus className="h-4 w-4" />
+            <span className="hidden md:inline">Add Expense</span>
           </Button>
         </div>
       </div>

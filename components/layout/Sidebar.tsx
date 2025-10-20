@@ -61,18 +61,23 @@ function SidebarContent() {
   return (
     <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
       <div className="flex items-center gap-2 border-b border-white/10 px-6 py-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-400">
-          <span className="text-sm font-bold text-black">DF</span>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500">
+          <span className="text-sm font-bold text-white">🍛</span>
         </div>
-        <h1 className="text-lg font-semibold">Desi Flavors</h1>
+        <div>
+          <h1 className="text-lg font-semibold text-orange-100">Desi Flavors</h1>
+          <p className="text-xs text-orange-200">Katy Food Truck</p>
+        </div>
       </div>
       <NavContent />
       <div className="mt-auto border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-green-300" />
+          <div className="h-10 w-10 rounded-full bg-orange-400 flex items-center justify-center">
+            <span className="text-lg">🍛</span>
+          </div>
           <div>
-            <p className="text-sm font-medium">Desi Flavors</p>
-            <p className="text-xs text-sidebar-foreground/60">Katy, TX</p>
+            <p className="text-sm font-medium text-orange-100">Desi Flavors Katy</p>
+            <p className="text-xs text-orange-200/60">Authentic Indian Cuisine</p>
           </div>
         </div>
       </div>
